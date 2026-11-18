@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pit Wall Focus Room</title>
+<!-- Created: 2026-11-18 · Written for: Opus 5.5 · Replaces: 2026-11-18 Claude-artifact versions -->
+<!-- One self-contained page. No external requests: system fonts, no analytics,
+     no network calls. Everything typed stays in this browser's localStorage. -->
+<style>
+  /* ---------- Palette ----------
+     Team colors: rosso red + deep blue. Teal + silver as the accent
+     (trousers, car stripe, small UI touches). */
+  :root{
+    --red:#D40000; --blue:#0033A0; --blue-text:#7FA2FF;
+    --teal:#00A19C; --teal-text:#3FD6CF; --silver:#C0C5CC;
+    --ink:#F4F5F7; --ink-dim:#A9B0BC;
+    --panel:rgba(10,12,16,.86); --line:rgba(255,255,255,.12);
+    --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --font-head:"Segoe UI Semibold","Helvetica Neue",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#0b0d11;color:var(--ink);font-family:var(--font);overflow:hidden}
+  button,input,textarea{font:inherit;color:inherit}
+  button{cursor:pointer}
+  :focus-visible{outline:2px solid var(--teal-text);outline-offset:2px}
+
+  /* ---------- Scene ---------- */
+  #scene{position:fixed;inset:0;width:100%;height:100%;display:block}
+  /* Ambient motion only: steam, screen flicker, the car roll-in. */
+  .steam path{fill:none;stroke:rgba(255,255,255,.22);stroke-width:3;stroke-linecap:round;
+    animation:steam 7s ease-in-out infinite;transform-box:fill-box;transform-origin:bottom}
+  .steam path:nth-child(2){animation-delay:-2.3s}
+  .steam path:nth-child(3){animation-delay:-4.6s}
+  @keyframes steam{0%{opacity:0;transform:translateY(8px) scaleY(.7)}40%{opacity:.9}100%{opacity:0;transform:translateY(-22px) scaleY(1.15)}}
+  .screen-glow{animation:flicker 9s steps(1) infinite}
+  .screen-glow.b{animation-delay:-3s}.screen-glow.c{animation-delay:-6s}
+  @keyframes flicker{0%,100%{opacity:.9}47%{opacity:.78}48%{opacity:.92}83%{opacity:.84}}
+  .trace{stroke-dasharray:6 4;animation:trace 18s linear infinite}
+  @keyframes trace{to{stroke-dashoffset:-200}}
+  #car{transform:translateX(1100px);transition:transform 6.5s cubic-bezier(.16,.84,.3,1)}
+  body.car-in #car{transform:translateX(0)}
+  .figure.host .kit{filter:url(#hostGlow)}
+  @media (prefers-reduced-motion:reduce){ .steam path,.screen-glow,.trace{animation:none} #car{transition:none} }
+
+  /* ---------- Task header ---------- */
+  #taskWrap{position:fixed;top:clamp(14px,3vh,36px);left:50%;transform:translateX(-50%);
+    width:min(92vw,980px);text-align:center;pointer-events:none}
+  #taskLabel{font-weight:600;letter-spacing:.18em;font-size:12px;color:var(--ink-dim)}
+  #taskTitle{font-family:var(--font-head);font-weight:700;font-size:clamp(28px,4.8vw,58px);line-height:1.08;
+    margin:.15em 0 .3em;text-shadow:0 2px 18px rgba(0,0,0,.7);overflow-wrap:anywhere}
+  #taskTitle.empty{color:var(--ink-dim)}
+  #taskInput{pointer-events:auto;width:min(100%,560px);padding:10px 14px;border-radius:10px;
+    background:rgba(10,12,16,.75);border:1px solid var(--line);font-size:16px}
+  body:not(.idle) #taskInput{display:none}
+
+  /* ---------- Control panel ---------- */
+  #panel{position:fixed;right:clamp(10px,2vw,28px);bottom:clamp(10px,2vw,28px);width:min(360px,calc(100vw - 20px));
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;
+    backdrop-filter:blur(8px);box-shadow:0 10px 40px rgba(0,0,0,.45)}
+  .row{display:flex;align-items:center;gap:12px}
+  #clock{font-weight:700;font-size:30px;font-variant-numeric:tabular-nums}
+  #phaseTag{display:inline-block;font-weight:700;letter-spacing:.12em;font-size:11px;padding:3px 8px;border-radius:6px;background:var(--red);color:#fff}
+  #phaseTag.break{background:var(--teal);color:#04201f}
+  #phaseTag.idle{background:#2a2f38;color:var(--ink-dim)}
+  #phaseNote{font-size:13px;color:var(--ink-dim);margin-top:6px;line-height:1.35}
+  .btns{display:flex;gap:8px;margin:14px 0 4px;flex-wrap:wrap}
+  .btn{border:1px solid var(--line);background:#1b1f27;border-radius:10px;padding:9px 14px;font-weight:600;font-size:14px}
+  .btn:hover{background:#242a34}
+  .btn.primary{background:var(--red);border-color:var(--red);color:#fff;flex:1}
+  .btn.primary:hover{background:#e81414}
+  .btn.danger{background:transparent;border:2px solid #ff5a5a;color:#ff8080}
+  .btn.danger:hover{background:rgba(255,90,90,.12)}
+  .btn.danger.solid{background:#c91818;border-color:#c91818;color:#fff}
+  .btn[hidden]{display:none}
+  hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+  .slider{margin:10px 0}
+  .slider .top{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-dim);margin-bottom:4px}
+  .slider .top b{color:var(--ink);font-weight:600}
+  input[type=range]{width:100%;accent-color:var(--teal)}
+  #nowPlaying{font-size:12px;color:var(--ink-dim);min-height:1.2em}
+  #padLine{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--ink-dim)}
+  .linkbtn{background:none;border:0;color:var(--teal-text);padding:0;font-size:13px;text-decoration:underline}
+
+  /* ---------- Overlays ---------- */
+  .overlay{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;
+    padding:clamp(120px,19vh,190px) 16px 0;background:linear-gradient(to bottom,rgba(0,0,0,.55),rgba(0,0,0,0) 55%)}
+  .overlay[hidden]{display:none}
+  .card{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;
+    box-shadow:0 10px 40px rgba(0,0,0,.5);backdrop-filter:blur(8px)}
+  #debrief .card{margin-right:clamp(0px,12vw,200px)}
+  .speaker{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .badge{width:12px;height:12px;border-radius:50%}
+  .speaker .name{font-weight:700;font-size:17px}
+  .speaker .role{font-size:12px;color:var(--ink-dim)}
+  .line{font-size:18px;line-height:1.45;margin:4px 0 12px}
+  textarea{width:100%;min-height:84px;resize:vertical;padding:12px;border-radius:10px;background:#11141a;border:1px solid var(--line);font-size:15px}
+  #reply{font-size:16px;line-height:1.5;margin:12px 0 4px}
+
+  /* Scratch pad */
+  .padHead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .padHead h2{margin:0;font-size:18px}
+  .info{position:relative;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;
+    border:1px solid var(--line);font-size:13px;font-weight:700;color:var(--teal-text);cursor:help;margin-left:6px}
+  .info .tip{position:absolute;left:50%;top:130%;transform:translateX(-50%);width:270px;padding:10px 12px;border-radius:10px;
+    background:#1b1f27;border:1px solid var(--line);font-size:13px;font-weight:400;line-height:1.45;color:var(--ink);
+    opacity:0;pointer-events:none;transition:opacity .15s;z-index:5;text-align:left}
+  .info:hover .tip,.info:focus .tip{opacity:1}
+  .padNote{font-size:13px;color:var(--ink-dim);margin:6px 0 10px}
+  #padList{max-height:46vh;overflow:auto;margin:0 0 12px;padding:0;list-style:none}
+  #padList li{border-top:1px solid var(--line);padding:10px 0;font-size:14px;line-height:1.4}
+  #padList .meta{font-size:12px;color:var(--ink-dim)}
+  #padList .r{font-size:12px;color:var(--ink-dim);font-style:italic}
+  #confirmBox{border:2px solid #ff5a5a;border-radius:12px;padding:12px;margin-top:10px;background:rgba(255,90,90,.07)}
+  #confirmBox[hidden]{display:none}
+  #confirmBox p{margin:0 0 6px;font-size:14px;line-height:1.4}
+  #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#1b1f27;border:1px solid var(--line);
+    padding:8px 14px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none}
+  #toast.show{opacity:1}
+  @media (max-width:700px){ #panel{left:10px;right:10px;width:auto} #debrief .card{margin-right:0} }
+</style>
+</head>
+<body class="idle">
+
+<!-- =========================================================
+     SCENE, drawn in SVG. viewBox is 1600×900; "slice" crops the
+     edges on odd window shapes instead of letterboxing.
+     ========================================================= -->
+<svg id="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1015"/><stop offset="1" stop-color="#171b22"/></linearGradient>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22262e"/><stop offset="1" stop-color="#101216"/></linearGradient>
+    <linearGradient id="night" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050913"/><stop offset=".75" stop-color="#0c1a3d"/><stop offset="1" stop-color="#1b2a52"/></linearGradient>
+    <radialGradient id="pool" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd9a8" stop-opacity=".28"/><stop offset="1" stop-color="#ffd9a8" stop-opacity="0"/></radialGradient>
+    <radialGradient id="screenPool" cx=".5" cy="0" r=".8"><stop offset="0" stop-color="#5a86ff" stop-opacity=".18"/><stop offset="1" stop-color="#5a86ff" stop-opacity="0"/></radialGradient>
+    <filter id="hostGlow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#fff" flood-opacity=".45"/></filter>
+  </defs>
+
+  <g id="backdrop">
+    <rect width="1600" height="640" fill="url(#wall)"/>
+    <g stroke="#1e232c" stroke-width="2">
+      <line x1="280" y1="0" x2="280" y2="640"/><line x1="560" y1="0" x2="560" y2="640"/>
+      <line x1="840" y1="0" x2="840" y2="640"/><line x1="1120" y1="0" x2="1120" y2="640"/>
+    </g>
+    <g fill="#e9eef7" opacity=".55"><rect x="150" y="18" width="220" height="5" rx="2"/><rect x="690" y="18" width="220" height="5" rx="2"/><rect x="1100" y="18" width="200" height="5" rx="2"/></g>
+
+    <!-- team banner: red, blue, thin teal line -->
+    <g transform="translate(0 100)">
+      <rect x="600" y="88" width="660" height="54" fill="#D40000"/>
+      <rect x="600" y="142" width="660" height="10" fill="#0033A0"/>
+      <rect x="600" y="155" width="660" height="4" fill="#00A19C"/>
+      <text id="bannerText" x="930" y="125" text-anchor="middle" fill="#fff" font-family="system-ui, sans-serif" font-weight="700" font-size="30" letter-spacing="9">CORSA BRITANNIA</text>
+    </g>
+
+    <!-- garage door onto a night pit lane -->
+    <rect x="1330" y="160" width="270" height="480" fill="url(#night)"/>
+    <rect x="1330" y="160" width="270" height="14" fill="#2a2f38"/>
+    <g fill="#ffe2b0" opacity=".7"><circle cx="1400" cy="300" r="3"/><circle cx="1490" cy="290" r="3"/><circle cx="1570" cy="305" r="3"/></g>
+    <rect x="1330" y="600" width="270" height="40" fill="#0f1830"/>
+    <rect x="1330" y="612" width="270" height="3" fill="#fff" opacity=".35"/>
+
+    <!-- floor + bay box: red, blue, teal inner line -->
+    <rect y="640" width="1600" height="260" fill="url(#floor)"/>
+    <rect x="500" y="700" width="640" height="130" fill="none" stroke="#D40000" stroke-width="3" opacity=".6"/>
+    <rect x="512" y="712" width="616" height="106" fill="none" stroke="#0033A0" stroke-width="2" opacity=".6"/>
+    <rect x="522" y="722" width="596" height="86" fill="none" stroke="#00A19C" stroke-width="1.5" opacity=".55"/>
+
+    <!-- silver tool chests + tyre stack under warmer blankets -->
+    <g fill="#8f98a3"><rect x="1160" y="560" width="70" height="80" rx="4"/><rect x="1238" y="580" width="44" height="60" rx="4"/></g>
+    <g stroke="#6c747e" stroke-width="2"><line x1="1166" y1="582" x2="1224" y2="582"/><line x1="1166" y1="604" x2="1224" y2="604"/><line x1="1244" y1="604" x2="1276" y2="604"/></g>
+    <g fill="#1b1d22" stroke="#2c313b" stroke-width="3"><rect x="1288" y="560" width="70" height="26" rx="10"/><rect x="1288" y="588" width="70" height="26" rx="10"/><rect x="1288" y="616" width="70" height="26" rx="10"/></g>
+    <rect x="1288" y="566" width="70" height="4" fill="#00A19C" opacity=".85"/>
+
+    <!-- coffee bar -->
+    <ellipse cx="290" cy="520" rx="340" ry="190" fill="url(#pool)"/>
+    <rect x="40" y="470" width="500" height="170" fill="#191c22"/>
+    <rect x="40" y="470" width="500" height="8" fill="#D40000"/>
+    <rect x="40" y="478" width="500" height="3" fill="#0033A0"/>
+    <g>
+      <rect x="96" y="384" width="170" height="86" rx="8" fill="#9aa2ac"/>
+      <rect x="96" y="384" width="170" height="12" rx="6" fill="#c6ccd3"/>
+      <rect x="120" y="436" width="22" height="18" fill="#3a3f48"/><rect x="170" y="436" width="22" height="18" fill="#3a3f48"/><rect x="220" y="436" width="22" height="18" fill="#3a3f48"/>
+      <circle cx="248" cy="408" r="8" fill="#00A19C"/>
+      <rect x="290" y="440" width="18" height="30" rx="3" fill="#e9e9e9"/><rect x="314" y="446" width="18" height="24" rx="3" fill="#e9e9e9"/>
+    </g>
+    <rect x="320" y="360" width="200" height="6" fill="#2b3038"/>
+    <g fill="#2f3640"><rect x="332" y="330" width="26" height="30" rx="4"/><rect x="368" y="322" width="26" height="38" rx="4"/><rect x="404" y="334" width="26" height="26" rx="4"/></g>
+  </g>
+
+  <!-- monitors on a gantry -->
+  <g id="monitors" transform="translate(0 100)">
+    <rect x="610" y="196" width="640" height="8" fill="#2a2f38"/>
+    <ellipse cx="930" cy="330" rx="380" ry="150" fill="url(#screenPool)"/>
+    <g class="screen-glow"><rect x="640" y="214" width="180" height="108" rx="4" fill="#0a1430" stroke="#2a2f38" stroke-width="4"/>
+      <polyline class="trace" points="650,300 680,280 710,290 740,250 770,262 800,236 812,240" fill="none" stroke="#7FA2FF" stroke-width="2"/>
+      <polyline points="650,310 812,310" stroke="#D40000" stroke-width="2" opacity=".6"/></g>
+    <g class="screen-glow b"><rect x="840" y="214" width="180" height="108" rx="4" fill="#0a1430" stroke="#2a2f38" stroke-width="4"/>
+      <g fill="#7FA2FF" opacity=".8"><rect x="856" y="236" width="70" height="6"/><rect x="856" y="252" width="110" height="6"/><rect x="856" y="268" width="90" height="6"/><rect x="856" y="284" width="120" height="6"/></g>
+      <rect x="980" y="236" width="24" height="70" fill="#00A19C" opacity=".75"/></g>
+    <g class="screen-glow c"><rect x="1040" y="214" width="180" height="108" rx="4" fill="#0a1430" stroke="#2a2f38" stroke-width="4"/>
+      <polyline class="trace" points="1050,260 1080,270 1110,240 1140,300 1170,268 1200,276 1212,262" fill="none" stroke="#ff6b6b" stroke-width="2"/></g>
+  </g>
+
+  <g id="crewLayer"></g>
+
+  <g class="steam" transform="translate(150 330)"><path d="M0 40 C -8 28, 8 18, 0 4"/><path d="M22 40 C 14 28, 30 18, 22 4"/><path d="M44 40 C 36 28, 52 18, 44 4"/></g>
+
+  <!-- the car: parked off-screen right, drives into the bay at session end -->
+  <g id="car"><g transform="translate(560 716)">
+    <ellipse cx="250" cy="92" rx="270" ry="10" fill="#000" opacity=".45"/>
+    <rect x="0" y="6" width="34" height="8" fill="#0033A0"/><rect x="14" y="14" width="8" height="36" fill="#222"/>
+    <path d="M8 66 L40 50 L170 44 L230 26 L300 24 L330 42 L470 46 L520 58 L520 72 L8 74 Z" fill="#D40000"/>
+    <path d="M40 60 L470 60 L470 64 L40 66 Z" fill="#0033A0"/>
+    <path d="M60 55 L460 53 L460 55.5 L60 57.5 Z" fill="#00A19C"/>
+    <path d="M232 28 Q 265 6 300 26" fill="none" stroke="#C0C5CC" stroke-width="6"/>
+    <rect x="490" y="70" width="44" height="6" fill="#111"/>
+    <g fill="#0d0d0f" stroke="#2a2a2e" stroke-width="4"><circle cx="96" cy="72" r="30"/><circle cx="420" cy="72" r="30"/></g>
+    <g fill="#C0C5CC"><circle cx="96" cy="72" r="6"/><circle cx="420" cy="72" r="6"/></g>
+  </g></g>
+</svg>
+
+<!-- ---------- Task ---------- -->
+<div id="taskWrap">
+  <div id="taskLabel">YOUR ONE TASK</div>
+  <h1 id="taskTitle" class="empty">Name the one thing</h1>
+  <input id="taskInput" type="text" maxlength="120" placeholder="Type your one task…" aria-label="Your one task">
+</div>
+
+<!-- ---------- Controls ---------- -->
+<aside id="panel" aria-label="Focus controls">
+  <div class="row">
+    <svg width="74" height="74" viewBox="0 0 74 74" aria-hidden="true">
+      <circle cx="37" cy="37" r="32" fill="none" stroke="#252a33" stroke-width="6"/>
+      <circle id="ringArc" cx="37" cy="37" r="32" fill="none" stroke="#D40000" stroke-width="6" stroke-linecap="round" transform="rotate(-90 37 37)" stroke-dasharray="201.06" stroke-dashoffset="0"/>
+    </svg>
+    <div><span id="phaseTag" class="idle">READY</span><div id="clock">30:00</div></div>
+  </div>
+  <div id="phaseNote" aria-live="polite">30 minutes on, 5 off. The crew stays quiet until the car comes in.</div>
+  <div class="btns">
+    <button class="btn primary" id="startBtn">Start focus</button>
+    <button class="btn" id="pauseBtn" hidden>Pause</button>
+    <button class="btn" id="endBtn" hidden title="End this stint now and go to the debrief">Box now</button>
+    <button class="btn" id="skipBreakBtn" hidden>Skip break</button>
+  </div>
+  <hr>
+  <div class="slider">
+    <div class="top"><span>Lo-fi music</span><b id="musicPct">45%</b></div>
+    <input type="range" id="musicVol" min="0" max="100" value="45" aria-label="Music volume">
+    <div id="nowPlaying"></div>
+  </div>
+  <div class="slider">
+    <div class="top"><span>Garage café</span><b id="cafePct">25%</b></div>
+    <input type="range" id="cafeVol" min="0" max="100" value="25" aria-label="Café sound volume">
+  </div>
+  <hr>
+  <div id="padLine"><span id="padCount">Scratch pad: empty</span><button class="linkbtn" id="padBtn">Open scratch pad</button></div>
+</aside>
+
+<!-- ---------- Debrief ---------- -->
+<div class="overlay" id="debrief" hidden role="dialog" aria-modal="true" aria-labelledby="dbName">
+  <div class="card">
+    <div class="speaker"><span class="badge" id="dbBadge"></span><div><div class="name" id="dbName"></div><div class="role" id="dbRole"></div></div></div>
+    <p class="line" id="dbAsk"></p>
+    <form id="dbForm">
+      <textarea id="dbDone" placeholder="What got done? Half-finished counts. So does 'nothing, I got pulled into email.'" aria-label="What you got done"></textarea>
+      <div class="btns"><button class="btn primary" type="submit">Add to scratch pad</button><button class="btn" type="button" id="dbSkip">Skip debrief</button></div>
+    </form>
+    <div id="dbAfter" hidden>
+      <p id="reply"></p>
+      <div class="btns"><button class="btn primary" id="toBreakBtn">Start 5-minute break</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Scratch pad ---------- -->
+<div class="overlay" id="padView" hidden role="dialog" aria-modal="true" aria-labelledby="padTitle">
+  <div class="card">
+    <div class="padHead">
+      <h2 id="padTitle">Debrief scratch pad
+        <span class="info" tabindex="0" aria-describedby="padTip">i
+          <span class="tip" id="padTip" role="tooltip">Every debrief you log lands here, newest first, so you can see progress across the day or the week. It's saved only in this browser on this device. Nothing is sent anywhere. It stays until you clear it.</span>
+        </span>
+      </h2>
+    </div>
+    <p class="padNote">Each debrief adds an entry here. Saved on this device only, until you clear it.</p>
+    <ul id="padList"></ul>
+    <div class="btns">
+      <button class="btn" id="copyBtn">Copy all</button>
+      <button class="btn" id="padClose">Close</button>
+      <button class="btn danger" id="clearBtn" style="margin-left:auto" title="Permanently wipes every entry on this device">Clear scratch pad</button>
+    </div>
+    <div id="confirmBox" hidden role="alertdialog" aria-labelledby="confirmText">
+      <p id="confirmText"></p>
+      <div class="btns"><button class="btn danger solid" id="confirmYes">Yes, wipe it</button><button class="btn" id="confirmNo">Keep my entries</button></div>
+    </div>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+/* ==========================================================================
+   PIT WALL FOCUS ROOM
+   1. CONFIG: timings, team, crew, debrief lines, tracks. Edit freely.
+   2. STORE: everything in localStorage, on this device only.
+   3. AUDIO: your MP3s on shuffle + a synthesized café layer.
+   4. TIMER: phases driven by an end timestamp (survives tab throttling).
+   5. DEBRIEF + SCRATCH PAD.
+   ========================================================================== */
+
+/* ---------- 1. CONFIG ---------- */
+const FOCUS_MIN = 30, BREAK_MIN = 5;
+const TEAM = "Corsa Britannia";
+
+// Original characters: not real people, not a real team.
+const CREW = [
+  {id:"giulia", name:"Giulia Rossetti", role:"Team Principal", kit:"#D40000",
+   bio:"Grew up above her family's café near Modena. Runs the team like a good kitchen: calm, exact, nobody shouts.",
+   ask:t=>`Welcome back in. What did you get done on “${t}”?`},
+  {id:"alistair", name:"Alistair Penrose", role:"Technical Director", kit:"#0033A0",
+   bio:"Ex-aerodynamicist from a rainy test track in the Midlands. Master of understatement, allergic to vague answers.",
+   ask:t=>`Right. Car's in. Where did “${t}” land?`},
+  {id:"marco", name:"Marco Ventura", role:"Driver · #7", kit:"#D40000",
+   bio:"Veteran from Turin, twelve seasons in. Has seen every kind of race and panics at none of them.",
+   ask:()=>`Thirty minutes is a proper stint. What came out of it?`},
+  {id:"isla", name:"Isla Brennan", role:"Driver · #22", kit:"#0033A0",
+   bio:"Rookie from the north of England. Keeps a paper notebook of every lap and every small gain.",
+   ask:t=>`Debrief time. What moved on “${t}”?`},
+  {id:"noor", name:"Noor Haddad", role:"Driver · #11", kit:"#D40000",
+   bio:"Precise and quiet. Asks one question, and it's always the right one.",
+   ask:()=>`Quick one. What's done now that wasn't done half an hour ago?`},
+  {id:"luca", name:"Luca Bellandi", role:"Driver · #4", kit:"#0033A0",
+   bio:"Telemetry obsessive from Bologna. Thinks in deltas, before and after.",
+   ask:()=>`Give me the delta. Start of the stint versus now?`},
+  {id:"theo", name:"Theo Brandt", role:"Reserve Driver", kit:"#D40000",
+   bio:"London-born, mostly lives at the espresso machine. Keeps everyone's pulse down.",
+   ask:()=>`Pull up a stool. How'd that stint go?`},
+];
+
+// Debrief replies: picked at random. Edit or add your own.
+const REPLIES = [
+  "Logged. Next stint, what's the first thing you touch?",
+  "Good. That's on the board.",
+  "Noted. Coffee, then we go again.",
+  "Clean stint. Take the five.",
+  "That counts. Progress is progress.",
+  "Box, box. Rest up, then back out.",
+  "Solid data. We'll build on it.",
+  "Understood. Five minutes, then the next lap.",
+  "Into the notebook it goes.",
+  "Fair enough. Not every lap is a quali lap.",
+  "Steady. That's how races get won.",
+  "Copy that. Stretch your legs.",
+];
+
+// Your Lyria tracks, in audio/. Listed here (not fetched) so the page
+// also works when opened straight from a downloaded folder.
+const TRACKS = [
+  "01-espresso-bar","02-night-pit-lane","03-telemetry","04-silver-arrow","05-cooldown-lap",
+  "06-garage-lights","07-rain-delay","08-out-lap","09-steam-wand","10-last-stint",
+];
+const trackTitle = f => f.slice(3).replace(/-/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+
+const SEATS = [
+  {id:"marco",x:90,y:560},{id:"isla",x:170,y:560},{id:"theo",x:250,y:560},{id:"noor",x:330,y:560},{id:"luca",x:410,y:560},
+  {id:"giulia",x:600,y:520,standing:true},{id:"alistair",x:670,y:520,standing:true},
+];
+
+/* ---------- 2. STORE ----------
+   Two keys: settings (task, volumes, track order) and the scratch pad.
+   localStorage can throw (private mode, storage off), so every call is
+   wrapped. If it fails, the page still runs and just won't remember. */
+const KEY_STATE = "pitwall.state", KEY_PAD = "pitwall.pad";
+const state = { phase:"idle", endAt:0, pausedLeft:0, task:"", music:45, cafe:25, hostIdx:0, queue:[], qPos:0 };
+const read = (k,f) => { try{ return JSON.parse(localStorage.getItem(k)) ?? f; }catch(e){ return f; } };
+const write = (k,v) => { try{ localStorage.setItem(k, JSON.stringify(v)); return true; }catch(e){ return false; } };
+Object.assign(state, read(KEY_STATE, {}));
+const save = () => write(KEY_STATE, state);
+let pad = read(KEY_PAD, []);            // [{at, task, done, by, reply}]
+
+/* ---------- 3. AUDIO ----------
+   Nothing plays until "Start focus" (browsers require a click). */
+let ctx=null, cafeGain=null, trackEl=null;
+const vol = v => (v/100)**2;           // perceptual curve
+const hz = m => 440*2**((m-69)/12);
+
+function shuffle(n, avoidFirst){
+  const a=[...Array(n).keys()];
+  for(let i=n-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  if(n>1 && a[0]===avoidFirst) [a[0],a[1]]=[a[1],a[0]];
+  return a;
+}
+let failures = 0;
+function playNextTrack(){
+  // Every track plays once before any repeats, and the order survives reloads.
+  if(state.qPos>=state.queue.length || state.queue.length!==TRACKS.length){
+    state.queue = shuffle(TRACKS.length, state.queue[state.queue.length-1]); state.qPos = 0;
+  }
+  const f = TRACKS[state.queue[state.qPos++]]; save();
+  trackEl.src = "audio/"+f+".mp3"; trackEl.volume = vol(state.music);
+  trackEl.play().then(()=>{ failures=0; setNowPlaying("♪ "+trackTitle(f)); })
+    .catch(e=>{ console.warn("track",f,e); if(++failures<TRACKS.length) setTimeout(playNextTrack,800); else setNowPlaying("Music couldn't load. Check the audio folder."); });
+}
+function noiseBuffer(sec, brown){
+  const b=ctx.createBuffer(1,ctx.sampleRate*sec,ctx.sampleRate), d=b.getChannelData(0); let last=0;
+  for(let i=0;i<d.length;i++){ const w=Math.random()*2-1; if(brown){ last=(last+0.02*w)/1.02; d[i]=last*3.5; } else d[i]=w; }
+  return b;
+}
+function loopNoise(brown,type,freq,q,level){
+  const s=ctx.createBufferSource(); s.buffer=noiseBuffer(6,brown); s.loop=true;
+  const f=ctx.createBiquadFilter(); f.type=type; f.frequency.value=freq; f.Q.value=q;
+  const g=ctx.createGain(); g.gain.value=level; s.connect(f).connect(g).connect(cafeGain); s.start(); return g;
+}
+function startCafe(){
+  loopNoise(true,"lowpass",320,0.4,0.9);                       // room tone
+  const murmur = loopNoise(false,"bandpass",700,0.9,0.05);      // conversation murmur
+  (function wander(){ murmur.gain.setTargetAtTime(0.03+Math.random()*0.06, ctx.currentTime, 0.25); setTimeout(wander, 250+Math.random()*500); })();
+  (function clink(){                                            // cup clinks
+    const t=ctx.currentTime, o=ctx.createOscillator(), g=ctx.createGain();
+    o.frequency.value=2200+Math.random()*1600;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.05,t+0.005); g.gain.exponentialRampToValueAtTime(0.0001,t+0.5);
+    o.connect(g).connect(cafeGain); o.start(t); o.stop(t+0.6); setTimeout(clink, 6000+Math.random()*16000); })();
+  (function hiss(){                                             // steam wand, every few minutes
+    const t=ctx.currentTime, s=ctx.createBufferSource(); s.buffer=noiseBuffer(4,false);
+    const f=ctx.createBiquadFilter(); f.type="bandpass"; f.frequency.value=3200; f.Q.value=1.2;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.06,t+0.6); g.gain.linearRampToValueAtTime(0,t+3.8);
+    s.connect(f).connect(g).connect(cafeGain); s.start(t); setTimeout(hiss, 120000+Math.random()*180000); })();
+}
+function startAudio(){
+  if(ctx){ if(ctx.state==="suspended") ctx.resume(); if(trackEl&&trackEl.paused) trackEl.play().catch(()=>{}); return; }
+  ctx = new (window.AudioContext||window.webkitAudioContext)();
+  cafeGain=ctx.createGain(); cafeGain.gain.value=vol(state.cafe); cafeGain.connect(ctx.destination);
+  startCafe();
+  trackEl = new Audio(); trackEl.addEventListener("ended", playNextTrack); playNextTrack();
+}
+function chime(){
+  if(!ctx) return;
+  [[76,0],[81,0.35]].forEach(([m,dt])=>{
+    const t=ctx.currentTime+dt, o=ctx.createOscillator(), g=ctx.createGain();
+    o.frequency.value=hz(m); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.08,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+1.8); o.connect(g).connect(ctx.destination); o.start(t); o.stop(t+2);
+  });
+}
+
+/* ---------- 4. TIMER ---------- */
+const $ = id => document.getElementById(id);
+const fmt = ms => { const s=Math.max(0,Math.ceil(ms/1000)); return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0"); };
+const timeOf = ts => new Date(ts).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+function setNowPlaying(s){ $("nowPlaying").textContent=s; }
+
+function startPhase(phase, minutes){ state.phase=phase; state.pausedLeft=0; state.endAt=Date.now()+minutes*60000; save(); render(); }
+function tick(){
+  if((state.phase==="focus"||state.phase==="break") && !state.pausedLeft && Date.now()>=state.endAt){
+    if(state.phase==="focus") enterDebrief();
+    else { chime(); state.phase="idle"; save(); render(); $("phaseNote").textContent="Break's over. One click when you're ready for the next stint."; }
+  }
+  renderClock();
+}
+function renderClock(){
+  const total=(state.phase==="break"?BREAK_MIN:FOCUS_MIN)*60000;
+  const left = state.phase==="idle" ? FOCUS_MIN*60000 : state.phase==="debrief" ? 0 : (state.pausedLeft || state.endAt-Date.now());
+  $("clock").textContent=fmt(left);
+  $("ringArc").setAttribute("stroke-dashoffset",(201.06*(1-left/total)).toFixed(1));
+  $("ringArc").setAttribute("stroke", state.phase==="break" ? "#00A19C" : "#D40000");
+  document.title = state.phase==="focus"||state.phase==="break" ? `${fmt(left)} · ${state.task||"Focus"}` : "Pit Wall Focus Room";
+}
+function render(){
+  const p=state.phase, tag=$("phaseTag"), b=document.body.classList;
+  tag.className = p==="break"?"break":p==="idle"?"idle":"";
+  tag.textContent = {idle:"READY", focus:state.pausedLeft?"PAUSED":"FOCUS", debrief:"DEBRIEF", break:"BREAK"}[p];
+  b.toggle("idle",p==="idle"); b.toggle("car-in",p==="debrief"||p==="break");
+  $("startBtn").hidden=p!=="idle";
+  $("pauseBtn").hidden=p!=="focus"; $("pauseBtn").textContent=state.pausedLeft?"Resume":"Pause";
+  $("endBtn").hidden=p!=="focus"; $("skipBreakBtn").hidden=p!=="break";
+  if(p==="focus") $("phaseNote").textContent = state.pausedLeft ? "Paused. The crew will wait." : `Focus ends at ${timeOf(state.endAt)}. Break starts then.`;
+  if(p==="debrief") $("phaseNote").textContent = "Car's in. Debrief with the crew, then a 5-minute break.";
+  if(p==="break") $("phaseNote").textContent = `Break until ${timeOf(state.endAt)}. Stand up, refill the coffee.`;
+  const t=$("taskTitle"); t.textContent=state.task||"Name the one thing"; t.classList.toggle("empty",!state.task);
+  document.querySelectorAll(".figure").forEach(f=>f.classList.toggle("host", p==="debrief" && f.dataset.id===host.id));
+  renderClock(); renderPadCount();
+}
+
+/* ---------- 5. DEBRIEF + SCRATCH PAD ---------- */
+let host = CREW[0];
+function enterDebrief(){
+  chime();
+  host = CREW[state.hostIdx % CREW.length]; state.hostIdx++;
+  state.phase="debrief"; save(); render();
+  $("dbBadge").style.background=host.kit;
+  $("dbName").textContent=host.name; $("dbRole").textContent=`${host.role} · ${TEAM}`;
+  $("dbName").title = host.bio;   // hover the name for the backstory
+  $("dbAsk").textContent=host.ask(state.task||"the task");
+  $("dbDone").value=""; $("dbForm").hidden=false; $("dbAfter").hidden=true;
+  // Let the car roll in first; the card follows a beat later.
+  setTimeout(()=>{ $("debrief").hidden=false; $("dbDone").focus(); }, matchMedia("(prefers-reduced-motion: reduce)").matches?0:2800);
+}
+function submitDebrief(ev){
+  ev.preventDefault();
+  const done=$("dbDone").value.trim()||"(left blank)";
+  const reply=REPLIES[Math.floor(Math.random()*REPLIES.length)];
+  pad.push({at:new Date().toISOString(), task:state.task, done, by:host.id, reply});
+  if(!write(KEY_PAD,pad)) toast("This browser isn't saving data, so the scratch pad will reset when you close the tab.");
+  $("reply").textContent=reply; $("dbForm").hidden=true; $("dbAfter").hidden=false;
+  renderPadCount(); $("toBreakBtn").focus();
+}
+function renderPadCount(){
+  const today=new Date().toDateString(), n=pad.filter(e=>new Date(e.at).toDateString()===today).length;
+  $("padCount").textContent = pad.length ? `Scratch pad: ${pad.length} entr${pad.length===1?"y":"ies"} · ${n} today` : "Scratch pad: empty";
+}
+const stamp = iso => new Date(iso).toLocaleString([], {weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+function openPad(){
+  const list=$("padList"); list.innerHTML=""; $("confirmBox").hidden=true;
+  if(!pad.length){ list.innerHTML="<li class='meta'>Nothing here yet. Your first debrief will show up here.</li>"; }
+  for(const e of [...pad].reverse()){
+    const li=document.createElement("li"), who=CREW.find(c=>c.id===e.by);
+    li.innerHTML=`<div class="meta"></div><div class="d"></div><div class="r"></div>`;
+    li.querySelector(".meta").textContent=`${stamp(e.at)} · ${e.task||"No task set"}`;   // textContent: typed text never becomes HTML
+    li.querySelector(".d").textContent=e.done;
+    li.querySelector(".r").textContent=who?`${who.name}: ${e.reply}`:e.reply;
+    list.appendChild(li);
+  }
+  $("clearBtn").disabled=!pad.length; $("copyBtn").disabled=!pad.length;
+  $("padView").hidden=false;
+}
+async function copyAll(){
+  const text = pad.map(e=>`${stamp(e.at)} | ${e.task||"No task set"}\n${e.done}`).join("\n\n");
+  try{ await navigator.clipboard.writeText(text); toast("Copied. Paste it wherever you keep notes."); }
+  catch(e){                                   // older browsers / file:// fallback
+    const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); toast("Copied."); }catch(_){ toast("Couldn't copy automatically. Select the entries and copy by hand."); }
+    ta.remove();
+  }
+}
+
+/* ---------- Crew drawing: simple faceless figures, silver trousers with a teal stripe ---------- */
+function drawCrew(){
+  const NS="http://www.w3.org/2000/svg", layer=$("crewLayer");
+  SEATS.forEach(s=>{
+    const c=CREW.find(x=>x.id===s.id), g=document.createElementNS(NS,"g");
+    g.setAttribute("class","figure"); g.dataset.id=c.id; g.setAttribute("transform",`translate(${s.x} ${s.y})`);
+    const legs = s.standing
+      ? `<rect x="-14" y="44" width="11" height="76" rx="4" fill="#C0C5CC"/><rect x="3" y="44" width="11" height="76" rx="4" fill="#C0C5CC"/>
+         <rect x="-6" y="46" width="2" height="72" fill="#00A19C"/><rect x="11" y="46" width="2" height="72" fill="#00A19C"/>`
+      : `<rect x="-16" y="44" width="34" height="11" rx="4" fill="#C0C5CC"/><rect x="10" y="44" width="10" height="34" rx="4" fill="#C0C5CC"/>
+         <rect x="-14" y="52" width="30" height="2" fill="#00A19C"/><rect x="17" y="46" width="2" height="30" fill="#00A19C"/>
+         <rect x="-5" y="64" width="4" height="40" fill="#555b66"/><ellipse cx="-3" cy="62" rx="20" ry="5" fill="#3a3f48"/>`;
+    g.innerHTML = `${legs}
+      <g class="kit"><rect x="-20" y="-6" width="40" height="54" rx="14" fill="${c.kit}"/>
+      <rect x="-20" y="14" width="40" height="5" fill="${c.kit==="#D40000"?"#0033A0":"#D40000"}" opacity=".9"/></g>
+      <circle cx="0" cy="-22" r="15" fill="#c9a98a"/><path d="M-15 -26 Q 0 -44 15 -26 Z" fill="#2a2220"/>
+      <rect x="14" y="16" width="10" height="12" rx="2" fill="#f2f2f2"/>`;
+    layer.appendChild(g);
+  });
+}
+
+/* ---------- Wiring ---------- */
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),3500); }
+
+$("taskInput").addEventListener("input", e=>{ state.task=e.target.value.trim(); save(); render(); });
+$("startBtn").addEventListener("click", ()=>{
+  startAudio();
+  if(!state.task) toast("Starting without a task. You can add one next break.");
+  startPhase("focus", FOCUS_MIN);
+});
+$("pauseBtn").addEventListener("click", ()=>{
+  if(state.pausedLeft){ state.endAt=Date.now()+state.pausedLeft; state.pausedLeft=0; startAudio(); }
+  else { state.pausedLeft=state.endAt-Date.now(); ctx&&ctx.suspend(); trackEl&&trackEl.pause(); }
+  save(); render();
+});
+$("endBtn").addEventListener("click", enterDebrief);
+$("skipBreakBtn").addEventListener("click", ()=>{ state.phase="idle"; save(); render(); });
+$("dbForm").addEventListener("submit", submitDebrief);
+$("dbSkip").addEventListener("click", ()=>{ $("debrief").hidden=true; startPhase("break", BREAK_MIN); });
+$("toBreakBtn").addEventListener("click", ()=>{ $("debrief").hidden=true; startPhase("break", BREAK_MIN); });
+
+$("padBtn").addEventListener("click", openPad);
+$("padClose").addEventListener("click", ()=>{ $("padView").hidden=true; });
+$("copyBtn").addEventListener("click", copyAll);
+$("clearBtn").addEventListener("click", ()=>{
+  $("confirmText").textContent = `This permanently wipes ${pad.length===1?"your 1 entry":"all "+pad.length+" entries"} from this device. There's no undo. Want to copy ${pad.length===1?"it":"them"} first?`;
+  $("confirmBox").hidden=false; $("confirmNo").focus();     // focus the safe choice
+});
+$("confirmNo").addEventListener("click", ()=>{ $("confirmBox").hidden=true; });
+$("confirmYes").addEventListener("click", ()=>{
+  pad=[]; try{ localStorage.removeItem(KEY_PAD); }catch(e){}
+  renderPadCount(); openPad(); toast("Scratch pad cleared.");
+});
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ $("padView").hidden=true; } });
+
+function bindSlider(id,key,pctId,apply){
+  const el=$(id); el.value=state[key]; $(pctId).textContent=state[key]+"%";
+  el.addEventListener("input",()=>{ state[key]=+el.value; $(pctId).textContent=el.value+"%"; apply(); save(); });
+}
+bindSlider("musicVol","music","musicPct",()=>{ if(trackEl) trackEl.volume=vol(state.music); });
+bindSlider("cafeVol","cafe","cafePct",()=>{ if(cafeGain) cafeGain.gain.value=vol(state.cafe); });
+
+/* ---------- Boot ---------- */
+// A reload mid-focus keeps the timer; mid-debrief or after a long gap, back to ready.
+if(state.phase==="debrief" || (state.phase!=="idle" && !state.pausedLeft && Date.now()>state.endAt+60000)) state.phase="idle";
+$("taskInput").value=state.task;
+$("bannerText").textContent=TEAM.toUpperCase();
+drawCrew(); render();
+// Browsers block sound until a click, so after a reload mid-session, offer one.
+if(state.phase!=="idle"){ const n=$("nowPlaying"); n.innerHTML='<button class="linkbtn" id="soundBtn">Turn sound back on</button>';
+  $("soundBtn").addEventListener("click", startAudio); }
+setInterval(tick, 500);
+</script>
+</body>
+</html>

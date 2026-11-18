@@ -1,3 +1,5 @@
+# Pit Wall Focus Room
+
 A calm, one-page focus timer set in a fictional racing team's garage coffee bar. Set your one task, click **Start focus**, and work for 30 minutes to lo-fi music and soft café sounds while the crew sits quietly. When the stint ends, the car drives into the bay and a crew member asks what you got done. Your answer goes into a scratch pad on your device. Then you get a 5-minute break.
 
 ## How to use it
