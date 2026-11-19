@@ -27,7 +27,7 @@ README.md      this file
 
 ## Customizing
 
-Everything to edit is in the `CONFIG` section near the top of the script in `index.html`: session lengths, team name, crew names and backstories (hover a crew member's name in the debrief to see theirs), debrief replies, and the track list.
+Everything to edit is in the `CONFIG` section near the top of the script in `index.html`: session lengths, team name, crew names and backstories (hover, tap, or tab to a crew member in the garage to see theirs), debrief replies, and the track list.
 
 ## Credits
 

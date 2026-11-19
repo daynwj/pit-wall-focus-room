@@ -41,6 +41,16 @@
   #car{transform:translateX(1100px);transition:transform 6.5s cubic-bezier(.16,.84,.3,1)}
   body.car-in #car{transform:translateX(0)}
   .figure.host .kit{filter:url(#hostGlow)}
+  /* Crew are hoverable/focusable: the kit glows and a card shows their backstory. */
+  .figure{cursor:pointer;outline:none}
+  .figure:hover .kit,.figure:focus-visible .kit,.figure.on .kit{filter:url(#hostGlow)}
+  #crewTip{position:fixed;z-index:6;width:min(260px,80vw);padding:10px 12px;border-radius:10px;
+    background:#1b1f27;border:1px solid var(--line);border-top:3px solid var(--teal);
+    box-shadow:0 10px 28px rgba(0,0,0,.45);pointer-events:none;transform:translate(-50%,-100%)}
+  #crewTip[hidden]{display:none}
+  #crewTip b{display:block;font-size:15px}
+  #crewTip .role{display:block;font-size:12px;color:var(--ink-dim);margin-bottom:6px}
+  #crewTip p{margin:0;font-size:13px;line-height:1.45}
   @media (prefers-reduced-motion:reduce){ .steam path,.screen-glow,.trace{animation:none} #car{transition:none} }
 
   /* ---------- Task header ---------- */
@@ -126,7 +136,7 @@
      SCENE, drawn in SVG. viewBox is 1600×900; "slice" crops the
      edges on odd window shapes instead of letterboxing.
      ========================================================= -->
-<svg id="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+<svg id="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="group" aria-label="The Corsa Britannia garage. Tab to a crew member to hear their backstory.">
   <defs>
     <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1015"/><stop offset="1" stop-color="#171b22"/></linearGradient>
     <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22262e"/><stop offset="1" stop-color="#101216"/></linearGradient>
@@ -173,6 +183,7 @@
 
     <!-- coffee bar -->
     <ellipse cx="290" cy="520" rx="340" ry="190" fill="url(#pool)"/>
+    <g id="behindBar"></g>
     <rect x="40" y="470" width="500" height="170" fill="#191c22"/>
     <rect x="40" y="470" width="500" height="8" fill="#D40000"/>
     <rect x="40" y="478" width="500" height="3" fill="#0033A0"/>
@@ -296,6 +307,7 @@
   </div>
 </div>
 <div id="toast" role="status"></div>
+<div id="crewTip" role="tooltip" hidden><b id="ctName"></b><span class="role" id="ctRole"></span><p id="ctBio"></p></div>
 
 <script>
 /* ==========================================================================
@@ -322,18 +334,21 @@ const CREW = [
   {id:"marco", name:"Marco Ventura", role:"Driver · #7", kit:"#D40000",
    bio:"Veteran from Turin, twelve seasons in. Has seen every kind of race and panics at none of them.",
    ask:()=>`Thirty minutes is a proper stint. What came out of it?`},
-  {id:"isla", name:"Isla Brennan", role:"Driver · #22", kit:"#0033A0",
-   bio:"Rookie from the north of England. Keeps a paper notebook of every lap and every small gain.",
-   ask:t=>`Debrief time. What moved on “${t}”?`},
-  {id:"noor", name:"Noor Haddad", role:"Driver · #11", kit:"#D40000",
-   bio:"Precise and quiet. Asks one question, and it's always the right one.",
-   ask:()=>`Quick one. What's done now that wasn't done half an hour ago?`},
+  {id:"isla", name:"Isla Brennan", role:"Race Engineer · #7", kit:"#0033A0",
+   bio:"Marco's race engineer, from the north of England. Keeps a paper notebook of every lap and every small gain, and reads it back to him over the radio.",
+   ask:t=>`Radio check. Talk me through “${t}”. What moved?`},
+  {id:"noor", name:"Noor Haddad", role:"Race Engineer · #4", kit:"#D40000",
+   bio:"Luca's race engineer. Precise and quiet. Asks one question per stint, and it's always the right one.",
+   ask:()=>`One question. What's done now that wasn't done half an hour ago?`},
   {id:"luca", name:"Luca Bellandi", role:"Driver · #4", kit:"#0033A0",
    bio:"Telemetry obsessive from Bologna. Thinks in deltas, before and after.",
    ask:()=>`Give me the delta. Start of the stint versus now?`},
   {id:"theo", name:"Theo Brandt", role:"Reserve Driver", kit:"#D40000",
    bio:"London-born, mostly lives at the espresso machine. Keeps everyone's pulse down.",
    ask:()=>`Pull up a stool. How'd that stint go?`},
+  {id:"rocco", name:"Rocco Marchetti", role:"Chief Mechanic", kit:"#0033A0",
+   bio:"Twenty-five years of wheel guns and late nights, from a village outside Parma. Runs the pit crew, and nobody else touches the espresso machine.",
+   ask:()=>`Car's back in one piece. What did you build while it was out?`},
 ];
 
 // Debrief replies: picked at random. Edit or add your own.
@@ -363,6 +378,8 @@ const trackTitle = f => f.slice(3).replace(/-/g," ").replace(/\b\w/g,c=>c.toUppe
 const SEATS = [
   {id:"marco",x:90,y:560},{id:"isla",x:170,y:560},{id:"theo",x:250,y:560},{id:"noor",x:330,y:560},{id:"luca",x:410,y:560},
   {id:"giulia",x:600,y:520,standing:true},{id:"alistair",x:670,y:520,standing:true},
+  // Behind the counter: drawn in a layer *under* the bar, so the counter hides his legs.
+  {id:"rocco",x:450,y:438,standing:true,behindBar:true},
 ];
 
 /* ---------- 2. STORE ----------
@@ -471,6 +488,7 @@ function render(){
   $("startBtn").hidden=p!=="idle";
   $("pauseBtn").hidden=p!=="focus"; $("pauseBtn").textContent=state.pausedLeft?"Resume":"Pause";
   $("endBtn").hidden=p!=="focus"; $("skipBreakBtn").hidden=p!=="break";
+  if(p==="idle") $("phaseNote").textContent = "30 minutes on, 5 off." + (matchMedia("(hover:hover)").matches ? " Hover a crew member to meet them." : " Tap a crew member to meet them.");
   if(p==="focus") $("phaseNote").textContent = state.pausedLeft ? "Paused. The crew will wait." : `Focus ends at ${timeOf(state.endAt)}. Break starts then.`;
   if(p==="debrief") $("phaseNote").textContent = "Car's in. Debrief with the crew, then a 5-minute break.";
   if(p==="break") $("phaseNote").textContent = `Break until ${timeOf(state.endAt)}. Stand up, refill the coffee.`;
@@ -533,8 +551,9 @@ async function copyAll(){
 
 /* ---------- Crew drawing: simple faceless figures, silver trousers with a teal stripe ---------- */
 function drawCrew(){
-  const NS="http://www.w3.org/2000/svg", layer=$("crewLayer");
+  const NS="http://www.w3.org/2000/svg";
   SEATS.forEach(s=>{
+    const layer = $(s.behindBar ? "behindBar" : "crewLayer");
     const c=CREW.find(x=>x.id===s.id), g=document.createElementNS(NS,"g");
     g.setAttribute("class","figure"); g.dataset.id=c.id; g.setAttribute("transform",`translate(${s.x} ${s.y})`);
     const legs = s.standing
@@ -548,9 +567,39 @@ function drawCrew(){
       <rect x="-20" y="14" width="40" height="5" fill="${c.kit==="#D40000"?"#0033A0":"#D40000"}" opacity=".9"/></g>
       <circle cx="0" cy="-22" r="15" fill="#c9a98a"/><path d="M-15 -26 Q 0 -44 15 -26 Z" fill="#2a2220"/>
       <rect x="14" y="16" width="10" height="12" rx="2" fill="#f2f2f2"/>`;
+    // Make each figure a hover/focus/tap target for its backstory card.
+    g.setAttribute("tabindex","0"); g.setAttribute("role","button");
+    g.setAttribute("aria-label", `${c.name}, ${c.role}. ${c.bio}`);
+    // Mouse: hover shows it. Touch: tap toggles it. Keyboard: focus shows it.
+    let ptr="";
+    g.addEventListener("pointerdown", e=>{ ptr=e.pointerType; });
+    g.addEventListener("pointerenter", e=>{ if(e.pointerType==="mouse") showTip(g,c); });
+    g.addEventListener("pointerleave", e=>{ if(e.pointerType==="mouse") hideTip(); });
+    g.addEventListener("focus", ()=>{ if(ptr!=="touch" && ptr!=="pen") showTip(g,c); });
+    g.addEventListener("blur", hideTip);
+    g.addEventListener("click", e=>{
+      e.stopPropagation();
+      if((ptr==="touch"||ptr==="pen") && g.classList.contains("on")) hideTip(); else showTip(g,c);
+      ptr="";
+    });
     layer.appendChild(g);
   });
 }
+
+/* Backstory card: positioned above the figure, kept inside the window. */
+let tipFor=null;
+function showTip(g,c){
+  if(tipFor && tipFor!==g) tipFor.classList.remove("on");
+  tipFor=g; g.classList.add("on");
+  $("ctName").textContent=c.name; $("ctRole").textContent=`${c.role} · ${TEAM}`; $("ctBio").textContent=c.bio;
+  const tip=$("crewTip"), r=g.getBoundingClientRect(); tip.hidden=false;
+  const half=tip.offsetWidth/2, x=Math.min(Math.max(r.left+r.width/2, half+8), innerWidth-half-8);
+  const above=r.top-10, y = above-tip.offsetHeight < 8 ? r.bottom+10+tip.offsetHeight : above;
+  tip.style.left=x+"px"; tip.style.top=y+"px";
+}
+function hideTip(){ $("crewTip").hidden=true; if(tipFor){ tipFor.classList.remove("on"); tipFor=null; } }
+document.addEventListener("click", hideTip);
+addEventListener("resize", hideTip);
 
 /* ---------- Wiring ---------- */
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),3500); }
@@ -584,7 +633,7 @@ $("confirmYes").addEventListener("click", ()=>{
   pad=[]; try{ localStorage.removeItem(KEY_PAD); }catch(e){}
   renderPadCount(); openPad(); toast("Scratch pad cleared.");
 });
-document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ $("padView").hidden=true; } });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ $("padView").hidden=true; hideTip(); } });
 
 function bindSlider(id,key,pctId,apply){
   const el=$(id); el.value=state[key]; $(pctId).textContent=state[key]+"%";
